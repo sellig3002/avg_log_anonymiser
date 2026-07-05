@@ -1,0 +1,11 @@
+.venv/
+__pycache__/
+*.pyc
+
+# Lokale modellen en build - hoort niet in de repo
+llama.cpp/
+models/
+
+# Benchmarkoutput
+results_accuracy.csv
+results_consistency.csv
