@@ -27,30 +27,28 @@ URL = os.environ.get("CLASSIFIER_URL", "http://127.0.0.1:8080/v1/chat/completion
 TIMEOUT = 60  # seconden per request
 
 SYSTEM_PROMPT = (
-    "Read the VALUE of the given JSON field and ignore the field name. Reply 1 if the "
-    "value contains any of these, even buried inside a longer string: a real person's "
-    "name (a human first/last name), an email address, an IP address (IPv4 or IPv6), or "
-    "a postal/street address. Reply 0 for everything else, especially machine or "
-    "software identifiers: service and system accounts, hostnames, process and file "
-    "names, rule or alert names, and event categories. Judge by the value, not the key: "
-    "a string built from symbols (\\ $ / . ::) or words like service, agent, daemon, "
-    "system, rule, alert is a machine, not a person. Reply with exactly one character: "
-    '1 or 0. Examples: {"submitter":"Ruben Haaksma"}->1 ; '
-    '{"note":"escalated by Wouter Kalf on friday"}->1 ; {"reply":"t.smid@bedrijf.be"}->1 ; '
-    '{"peer":"172.19.4.88"}->1 ; {"loc":"Molenweg 8, 3512 AB Deventer"}->1 ; '
-    '{"svc":"agent-updater"}->0 ; {"node":"prod-web-03"}->0 ; ' 
-    '{"given":"Franka"}->1 ; '
-    '{"alert":"Rare Port Scan Detected"}->0 ; {"bin":"lsass.exe"}->0'
+    "Classify whether the VALUE in the given JSON field is personal data under the GDPR"
+    "identifies a specific person: name, email, phone, address, username, laptopname, IP etc.)"
+    "Reply with exactly one character: 1 = personal data, 0 = not"
+    'Examples: {"Name":"joshuajohn"}->1 ; {"Color":"blue"}->0 ;'
+    '{"Phone":"0612345678"}->1 ; {"Country":"Netherlands"}->0 ;'
+    '{"host":"laptop of bob"}->1 ; {"name":"microsoft threat intel"}->0'
 )
 
 GRAMMAR = 'root ::= "1" | "0"'
 
 
-def classify_field(field):
-    """Stuur één JSON-veld naar het model en geef 0 of 1 terug."""
+def classify_field(field, system_prompt=None):
+    """Stuur één JSON-veld naar het model en geef 0 of 1 terug.
+
+    system_prompt overschrijft de standaard SYSTEM_PROMPT als het is meegegeven
+    (en niet leeg is). Zo kan de webapp per request een eigen prompt gebruiken
+    zonder de module-globale te muteren.
+    """
+    prompt = system_prompt if system_prompt else SYSTEM_PROMPT
     payload = {
         "messages": [
-            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "system", "content": prompt},
             {"role": "user", "content": json.dumps(field)},
         ],
         "cache_prompt": True,

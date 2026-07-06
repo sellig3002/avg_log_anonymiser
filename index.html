@@ -15,8 +15,20 @@
              font-family:monospace; font-size:13px; resize:vertical; }
   button { margin-top:12px; padding:9px 20px; border:none; border-radius:8px;
            background:#4f8cff; color:#fff; font-weight:600; cursor:pointer; }
+  button.secondary { background:#2e3345; }
   button:disabled { opacity:.5; cursor:default; }
   #status { margin-left:12px; font-size:13px; color:#8b90a0; }
+
+  details { margin-top:20px; border:1px solid #2e3345; border-radius:8px;
+            background:#161a23; }
+  summary { cursor:pointer; padding:12px 14px; font-size:13px; font-weight:600;
+            color:#c7cbd6; user-select:none; }
+  details[open] summary { border-bottom:1px solid #2e3345; }
+  .panel { padding:0 14px 14px; }
+  .panel textarea { min-height:150px; }
+  .warn { font-size:12px; color:#e0b341; margin:10px 0 4px; line-height:1.4; }
+  .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .saved { font-size:12px; color:#8b90a0; }
 </style>
 </head>
 <body>
@@ -29,14 +41,105 @@
   </div>
   <label>Uitvoer</label>
   <textarea id="output" spellcheck="false"></textarea>
+
+  <details>
+    <summary>System prompt aanpassen</summary>
+    <div class="panel">
+      <p class="warn">
+        Warning: editing the system prompt changes how the local language model
+        decides what counts as personal data. Use at your own risk. Changes apply
+        only locally, in your own browser, and are never sent to or stored on a server.
+      </p>
+      <textarea id="systemPrompt" spellcheck="false"></textarea>
+      <div class="row">
+        <button class="secondary" onclick="resetPrompt()">Terug naar standaard</button>
+        <span id="promptSaved" class="saved"></span>
+      </div>
+    </div>
+  </details>
+
+  <details>
+    <summary>rules.conf aanpassen</summary>
+    <div class="panel">
+      <p class="warn">
+        Warning: editing these rules changes which fields are always redacted,
+        always skipped, or sent to the model. Use at your own risk. Changes apply
+        only locally, in your own browser, and are never sent to or stored on a server.
+      </p>
+      <textarea id="rules" spellcheck="false"></textarea>
+      <div class="row">
+        <button class="secondary" onclick="resetRules()">Terug naar standaard</button>
+        <span id="rulesSaved" class="saved"></span>
+      </div>
+    </div>
+  </details>
+
 <script>
+const LS_PROMPT = 'avg_system_prompt';
+const LS_RULES  = 'avg_rules';
+let defaults = { system_prompt: '', rules: '' };
+
+// Haal de standaardwaarden op en vul de velden (uit localStorage indien aanwezig).
+async function loadSettings() {
+  try {
+    const res = await fetch('/defaults');
+    defaults = await res.json();
+  } catch (e) { /* server niet bereikbaar: velden blijven leeg */ }
+
+  const savedPrompt = localStorage.getItem(LS_PROMPT);
+  const savedRules  = localStorage.getItem(LS_RULES);
+  document.getElementById('systemPrompt').value = savedPrompt !== null ? savedPrompt : defaults.system_prompt;
+  document.getElementById('rules').value        = savedRules  !== null ? savedRules  : defaults.rules;
+  if (savedPrompt !== null) document.getElementById('promptSaved').textContent = 'aangepast (opgeslagen in browser)';
+  if (savedRules  !== null) document.getElementById('rulesSaved').textContent  = 'aangepast (opgeslagen in browser)';
+}
+
+// Sla wijzigingen op in de browser terwijl er getypt wordt.
+document.addEventListener('DOMContentLoaded', () => {
+  loadSettings();
+  const p = document.getElementById('systemPrompt');
+  const r = document.getElementById('rules');
+  p.addEventListener('input', () => {
+    localStorage.setItem(LS_PROMPT, p.value);
+    document.getElementById('promptSaved').textContent = 'aangepast (opgeslagen in browser)';
+  });
+  r.addEventListener('input', () => {
+    localStorage.setItem(LS_RULES, r.value);
+    document.getElementById('rulesSaved').textContent = 'aangepast (opgeslagen in browser)';
+  });
+});
+
+function resetPrompt() {
+  document.getElementById('systemPrompt').value = defaults.system_prompt;
+  localStorage.removeItem(LS_PROMPT);
+  document.getElementById('promptSaved').textContent = 'standaard hersteld';
+}
+function resetRules() {
+  document.getElementById('rules').value = defaults.rules;
+  localStorage.removeItem(LS_RULES);
+  document.getElementById('rulesSaved').textContent = 'standaard hersteld';
+}
+
 async function run() {
   const btn = document.getElementById('go');
   const status = document.getElementById('status');
   const input = document.getElementById('input').value;
+  const promptVal = document.getElementById('systemPrompt').value;
+  const rulesVal  = document.getElementById('rules').value;
+
+  // Alleen een override meesturen als deze afwijkt van de standaard; anders leeg
+  // laten zodat de server zijn eigen standaard gebruikt.
+  const body = { text: input };
+  if (promptVal && promptVal !== defaults.system_prompt) body.system_prompt = promptVal;
+  if (rulesVal  && rulesVal  !== defaults.rules)         body.rules = rulesVal;
+
   btn.disabled = true; status.textContent = 'Bezig...';
   try {
-    const res = await fetch('/anonymize', { method:'POST', body: input });
+    const res = await fetch('/anonymize', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
     document.getElementById('output').value = await res.text();
     status.textContent = res.ok ? 'Klaar' : 'Fout';
   } catch (e) {

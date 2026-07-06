@@ -35,13 +35,11 @@ NULLISH = ("null", "none", "false", "true")
 PRIORITY_KEYS = ("name", "user", "id", "email", "phone", "address", "principal")
 
 
-def load_rules(path):
-    """Lees rules.conf als dict: sectie (lowercase) -> lijst met (lowercase) woorden."""
+def parse_rules(text):
+    """Parse rules-tekst als dict: sectie (lowercase) -> lijst met (lowercase) woorden."""
     sections = {}
     current = None
-    if not path.exists():
-        return sections
-    for line in path.read_text(encoding="utf-8").splitlines():
+    for line in text.splitlines():
         line = line.strip()
         if not line or line.startswith("#"):
             continue
@@ -51,6 +49,13 @@ def load_rules(path):
         elif current is not None:
             sections[current].append(line.lower())
     return sections
+
+
+def load_rules(path):
+    """Lees rules.conf van schijf en parse het."""
+    if not path.exists():
+        return {}
+    return parse_rules(path.read_text(encoding="utf-8"))
 
 
 def flatten_json(data):
@@ -94,14 +99,30 @@ def extract_pairs(text):
         return parse_text(text)
 
 
-def is_noise(value):
-    """True voor waarden die duidelijk geen persoonsgegeven zijn (ruis)."""
-    v = value.strip()
+def is_nullish(value):
+    """True voor 'lege' waarden die NOOIT een persoonsgegeven kunnen zijn.
+
+    Dit zijn null/none/false/true en waarden zonder enkele letter of cijfer
+    (bv. "//]"). Deze mogen altijd weg, ook als de key normaal geanonimiseerd
+    wordt -- een lege waarde bevat immers geen persoonsgegeven om te redigeren.
+    Bewust GEEN cijfer-only / GUID / token hier: die horen wél afhankelijk te
+    zijn van de key (bv. phoneNumber = "0612345678").
+    """
+    v = value.strip().lower()
     # null/none/false/true
-    if v.lower() in NULLISH:
+    if v in NULLISH:
         return True
     # geen enkele letter of cijfer, bv. "//]"
     if not any(c.isalnum() for c in v):
+        return True
+    return False
+
+
+def is_noise(value):
+    """True voor waarden die duidelijk geen persoonsgegeven zijn (ruis)."""
+    v = value.strip()
+    # null/none/false/true of alleen symbolen
+    if is_nullish(v):
         return True
     # uitsluitend cijfers, bv. "200"
     if v.isdigit():
@@ -121,6 +142,13 @@ def classify(key, value, rules):
     """Geef 'anonymize', 'llm' of None (weggooien) terug."""
     key_l = key.lower()
     value_l = value.lower()
+
+    # 0) Lege / null-achtige waarde (null, none, false, true, of alleen symbolen)
+    #    is nooit een persoonsgegeven -- ook niet als de key normaal onder de
+    #    anonymize-regels valt. Dit staat expres vóór alle andere checks, zodat
+    #    bv. "ipAddress: null" niet de waarde "null" in de redigeer-lijst zet.
+    if is_nullish(value):
+        return None
 
     # 1) Harde override: woord uit valueContains -> altijd anonymize, key maakt niet uit.
     if any(word in value_l for word in rules.get("anonymize.valuecontains", [])):
