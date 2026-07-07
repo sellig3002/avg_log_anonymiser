@@ -28,11 +28,12 @@ TIMEOUT = 60  # seconden per request
 
 SYSTEM_PROMPT = (
     "Classify whether the VALUE in the given JSON field is personal data under the GDPR"
-    "identifies a specific person: name, email, phone, address, username, laptopname, IP etc.)"
-    "Reply with exactly one character: 1 = personal data, 0 = not"
-    'Examples: {"Name":"joshuajohn"}->1 ; {"Color":"blue"}->0 ;'
-    '{"Phone":"0612345678"}->1 ; {"Country":"Netherlands"}->0 ;'
-    '{"host":"laptop of bob"}->1 ; {"name":"microsoft threat intel"}->0'
+    "that identifies a specific person: name, email, phone, address, username and IP. "
+    "Reply with exactly one character: 1 = personal data, 0 = not "
+    'Examples: {"Name":"joshuajohn"}->1 ; {"Color":"blue"}->0 ; '
+    '{"Phone":"0612345678"}->1 ; {"Country":"Netherlands"}->0 ; '
+    '{"host":"laptop of bob"}->1 ; {"name":"microsoft threat intel"}->0 ; '
+    '{"account":"<service account name or proces name>"->0'
 )
 
 GRAMMAR = 'root ::= "1" | "0"'
