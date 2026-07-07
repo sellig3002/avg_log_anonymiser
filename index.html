@@ -5,40 +5,56 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>AVG Anonimiseer</title>
 <style>
-  body { font-family: system-ui, sans-serif; background:#0f1117; color:#e2e4ea;
+  /* Kleuren en de radius in één plek, zodat alles gegarandeerd gelijk staat */
+  :root {
+    --bg:#0f1117; --panel:#161a23; --field:#1a1d27; --border:#2e3345;
+    --text:#e2e4ea; --muted:#8b90a0; --accent:#4f8cff;
+    --radius:10px;      /* de "r" boven: pas dit één getal aan en alles verandert mee */
+    --radius-inner:8px; /* iets kleiner dan de kaart = netter genest */
+  }
+
+  /* DE belangrijkste fix: padding + border tellen nu MEE in de breedte,
+     zodat width:100% niet meer buiten zijn kader uitsteekt */
+  *, *::before, *::after { box-sizing: border-box; }
+
+  body { font-family:system-ui, sans-serif; background:var(--bg); color:var(--text);
          max-width:900px; margin:0 auto; padding:24px; }
   h1 { font-size:20px; }
   label { display:block; font-size:12px; text-transform:uppercase; letter-spacing:.8px;
-          color:#8b90a0; margin:16px 0 6px; }
-  textarea { width:100%; min-height:220px; padding:12px; background:#1a1d27;
-             border:1px solid #2e3345; border-radius:8px; color:#e2e4ea;
+          color:var(--muted); margin:16px 0 6px; }
+  textarea { width:100%; min-height:220px; padding:12px; background:var(--field);
+             border:1px solid var(--border); border-radius:var(--radius); color:var(--text);
              font-family:monospace; font-size:13px; resize:vertical; }
-  button { margin-top:12px; padding:9px 20px; border:none; border-radius:8px;
-           background:#4f8cff; color:#fff; font-weight:600; cursor:pointer; }
-  button.secondary { background:#2e3345; }
+  button { margin-top:12px; padding:9px 20px; border:none; border-radius:var(--radius);
+           background:var(--accent); color:#fff; font-weight:600; cursor:pointer; }
+  button.secondary { background:var(--border); }
   button:disabled { opacity:.5; cursor:default; }
-  #status { margin-left:12px; font-size:13px; color:#8b90a0; }
+  #status { margin-left:12px; font-size:13px; color:var(--muted); }
 
-  details { margin-top:20px; border:1px solid #2e3345; border-radius:8px;
-            background:#161a23; }
+  /* overflow:hidden -> de vierkante binnenhoeken blijven binnen de ronde kaarthoek */
+  details { margin-top:20px; border:1px solid var(--border); border-radius:var(--radius);
+            background:var(--panel); overflow:hidden; }
   summary { cursor:pointer; padding:12px 14px; font-size:13px; font-weight:600;
             color:#c7cbd6; user-select:none; }
-  details[open] summary { border-bottom:1px solid #2e3345; }
-  .panel { padding:0 14px 14px; }
-  .panel textarea { min-height:150px; }
-  .warn { font-size:12px; color:#e0b341; margin:10px 0 4px; line-height:1.4; }
+  details[open] summary { border-bottom:1px solid var(--border); }
+  .panel { padding:14px; }                 /* was 0 14px 14px -> nu ook lucht bovenaan */
+  .panel textarea { min-height:150px; border-radius:var(--radius-inner); }
+  .warn { font-size:12px; color:#e0b341; margin:0 0 10px; line-height:1.4; }
   .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
-  .saved { font-size:12px; color:#8b90a0; }
+  .saved { font-size:12px; color:var(--muted); }
 </style>
 </head>
 <body>
   <h1>AVG Anonimiseer</h1>
+
   <label>Invoer (JSON)</label>
   <textarea id="input" placeholder="Plak hier je JSON-log..." spellcheck="false"></textarea>
+
   <div>
     <button id="go" onclick="run()">Anonimiseer</button>
     <span id="status"></span>
   </div>
+
   <label>Uitvoer</label>
   <textarea id="output" spellcheck="false"></textarea>
 
@@ -74,79 +90,79 @@
     </div>
   </details>
 
-<script>
-const LS_PROMPT = 'avg_system_prompt';
-const LS_RULES  = 'avg_rules';
-let defaults = { system_prompt: '', rules: '' };
+  <script>
+    const LS_PROMPT = 'avg_system_prompt';
+    const LS_RULES  = 'avg_rules';
+    let defaults = { system_prompt: '', rules: '' };
 
-// Haal de standaardwaarden op en vul de velden (uit localStorage indien aanwezig).
-async function loadSettings() {
-  try {
-    const res = await fetch('/defaults');
-    defaults = await res.json();
-  } catch (e) { /* server niet bereikbaar: velden blijven leeg */ }
+    // Haal de standaardwaarden op en vul de velden (uit localStorage indien aanwezig).
+    async function loadSettings() {
+      try {
+        const res = await fetch('/defaults');
+        defaults = await res.json();
+      } catch (e) { /* server niet bereikbaar: velden blijven leeg */ }
+      const savedPrompt = localStorage.getItem(LS_PROMPT);
+      const savedRules  = localStorage.getItem(LS_RULES);
+      document.getElementById('systemPrompt').value = savedPrompt !== null ? savedPrompt : defaults.system_prompt;
+      document.getElementById('rules').value        = savedRules  !== null ? savedRules  : defaults.rules;
+      if (savedPrompt !== null) document.getElementById('promptSaved').textContent = 'aangepast (opgeslagen in browser)';
+      if (savedRules  !== null) document.getElementById('rulesSaved').textContent  = 'aangepast (opgeslagen in browser)';
+    }
 
-  const savedPrompt = localStorage.getItem(LS_PROMPT);
-  const savedRules  = localStorage.getItem(LS_RULES);
-  document.getElementById('systemPrompt').value = savedPrompt !== null ? savedPrompt : defaults.system_prompt;
-  document.getElementById('rules').value        = savedRules  !== null ? savedRules  : defaults.rules;
-  if (savedPrompt !== null) document.getElementById('promptSaved').textContent = 'aangepast (opgeslagen in browser)';
-  if (savedRules  !== null) document.getElementById('rulesSaved').textContent  = 'aangepast (opgeslagen in browser)';
-}
-
-// Sla wijzigingen op in de browser terwijl er getypt wordt.
-document.addEventListener('DOMContentLoaded', () => {
-  loadSettings();
-  const p = document.getElementById('systemPrompt');
-  const r = document.getElementById('rules');
-  p.addEventListener('input', () => {
-    localStorage.setItem(LS_PROMPT, p.value);
-    document.getElementById('promptSaved').textContent = 'aangepast (opgeslagen in browser)';
-  });
-  r.addEventListener('input', () => {
-    localStorage.setItem(LS_RULES, r.value);
-    document.getElementById('rulesSaved').textContent = 'aangepast (opgeslagen in browser)';
-  });
-});
-
-function resetPrompt() {
-  document.getElementById('systemPrompt').value = defaults.system_prompt;
-  localStorage.removeItem(LS_PROMPT);
-  document.getElementById('promptSaved').textContent = 'standaard hersteld';
-}
-function resetRules() {
-  document.getElementById('rules').value = defaults.rules;
-  localStorage.removeItem(LS_RULES);
-  document.getElementById('rulesSaved').textContent = 'standaard hersteld';
-}
-
-async function run() {
-  const btn = document.getElementById('go');
-  const status = document.getElementById('status');
-  const input = document.getElementById('input').value;
-  const promptVal = document.getElementById('systemPrompt').value;
-  const rulesVal  = document.getElementById('rules').value;
-
-  // Alleen een override meesturen als deze afwijkt van de standaard; anders leeg
-  // laten zodat de server zijn eigen standaard gebruikt.
-  const body = { text: input };
-  if (promptVal && promptVal !== defaults.system_prompt) body.system_prompt = promptVal;
-  if (rulesVal  && rulesVal  !== defaults.rules)         body.rules = rulesVal;
-
-  btn.disabled = true; status.textContent = 'Bezig...';
-  try {
-    const res = await fetch('/anonymize', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body)
+    // Sla wijzigingen op in de browser terwijl er getypt wordt.
+    document.addEventListener('DOMContentLoaded', () => {
+      loadSettings();
+      const p = document.getElementById('systemPrompt');
+      const r = document.getElementById('rules');
+      p.addEventListener('input', () => {
+        localStorage.setItem(LS_PROMPT, p.value);
+        document.getElementById('promptSaved').textContent = 'aangepast (opgeslagen in browser)';
+      });
+      r.addEventListener('input', () => {
+        localStorage.setItem(LS_RULES, r.value);
+        document.getElementById('rulesSaved').textContent = 'aangepast (opgeslagen in browser)';
+      });
     });
-    document.getElementById('output').value = await res.text();
-    status.textContent = res.ok ? 'Klaar' : 'Fout';
-  } catch (e) {
-    status.textContent = 'Fout: ' + e;
-  }
-  btn.disabled = false;
-}
-</script>
+
+    function resetPrompt() {
+      document.getElementById('systemPrompt').value = defaults.system_prompt;
+      localStorage.removeItem(LS_PROMPT);
+      document.getElementById('promptSaved').textContent = 'standaard hersteld';
+    }
+
+    function resetRules() {
+      document.getElementById('rules').value = defaults.rules;
+      localStorage.removeItem(LS_RULES);
+      document.getElementById('rulesSaved').textContent = 'standaard hersteld';
+    }
+
+    async function run() {
+      const btn    = document.getElementById('go');
+      const status = document.getElementById('status');
+      const input      = document.getElementById('input').value;
+      const promptVal  = document.getElementById('systemPrompt').value;
+      const rulesVal   = document.getElementById('rules').value;
+
+      // Alleen een override meesturen als deze afwijkt van de standaard; anders leeg
+      // laten zodat de server zijn eigen standaard gebruikt.
+      const body = { text: input };
+      if (promptVal && promptVal !== defaults.system_prompt) body.system_prompt = promptVal;
+      if (rulesVal  && rulesVal  !== defaults.rules)         body.rules         = rulesVal;
+
+      btn.disabled = true; status.textContent = 'Bezig...';
+      try {
+        const res = await fetch('/anonymize', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        });
+        document.getElementById('output').value = await res.text();
+        status.textContent = res.ok ? 'Klaar' : 'Fout';
+      } catch (e) {
+        status.textContent = 'Fout: ' + e;
+      }
+      btn.disabled = false;
+    }
+  </script>
 </body>
 </html>
